@@ -52,10 +52,6 @@ export XRDCONFDIR
 export XRDCONF="$XRDCONFDIR/system.cnf"
 source ${XRDCONF}
 
-# ApMon files
-export apmonPidFile=${XRDRUNDIR}/admin/apmon.pid
-export apmonLogFile=${XRDRUNDIR}/logs/apmon.log
-
 USER=${USER:-$LOGNAME}
 [[ -z "$USER" ]] && USER=$(/usr/bin/id -nu)
 
@@ -344,38 +340,6 @@ bootstrap() {
 }
 
 ######################################
-getSrvToMon() {
-  srvToMon=""
-  [[ -n "${SE_NAME}" ]] && se="${SE_NAME}_"
-
-  for typ in manager server ; do
-    for srv in xrootd cmsd ; do
-      pid=$(/usr/bin/pgrep -f -U $USER "$srv .*$typ" | head -1)
-      [[ -n "${pid}" ]] && srvToMon="$srvToMon ${se}${typ}_${srv} $pid"
-    done
-  done
-}
-
-######################################
-servMon() {
-  [[ -n "${SE_NAME}" ]] && se="${SE_NAME}_"
-
-  startUp /usr/sbin/servMon.sh -p ${apmonPidFile} ${se}xrootd $*
-  echo
-}
-
-######################################
-startMon() {
-    [[ -z "${MONALISA_HOST}" ]] && return
-
-    getSrvToMon
-    echo -n "Starting ApMon [$srvToMon] ..."
-    servMon -f $srvToMon
-    echo_passed
-    echo
-}
-
-######################################
 killXRD() {
     echo -n "Stopping xrootd/cmsd: "
 
@@ -389,9 +353,6 @@ killXRD() {
 
     echo_passed;
     echo
-
-    echo -n "Stopping ApMon:"
-    servMon -k
 }
 
 ######################################
@@ -493,8 +454,6 @@ restartXRD() {
       )
     fi
 
-    startMon
-    sleep 1 ## need delay for starMon
 }
 
 ######################################
@@ -531,21 +490,6 @@ else
   returnval=1;
 fi
 
-if [[ -n "${MONALISA_HOST}" ]] ; then
-  lines=$(/bin/find ${apmonPidFile}* 2>/dev/null | /usr/bin/wc -l)
-
-  if (( lines > 0 )) ; then
-    echo -n "apmon:";
-    echo_success;
-    echo
-  else
-    echo -n "apmon:";
-    echo_failure;
-    echo
-    returnval=1;
-  fi
-fi
-
 exit $returnval
 }
 
@@ -573,8 +517,6 @@ if [[ "$1" == "-c" ]]; then  ## check and restart if not running
       echo "------------------------------------------"
     fi
 
-    ## we start servMon anyway
-    [[ -n "$MONALISA_HOST" ]] && servMon
     checkstate
 elif [[ "$1" == "-check" ]]; then
     serverinfo
@@ -587,8 +529,6 @@ elif [[ "$1" == "-f" ]]; then   ## force restart
     echo "(Re-)Starting ...."
     restartXRD
 
-    ## we start servMon anyway
-    [[ -n "$MONALISA_HOST" ]] && servMon
     checkstate
 elif [[ "$1" == "-k" ]]; then  ## kill running processes
     removecron
